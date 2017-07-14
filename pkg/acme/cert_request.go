@@ -13,12 +13,28 @@ import (
 	"net/url"
 	"sync"
 
+	"time"
+
 	"github.com/cenk/backoff"
 	"github.com/jetstack/kube-lego/pkg/kubelego_const"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/crypto/acme"
 	"golang.org/x/net/context"
-	"time"
 )
+
+var (
+	certReqs = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cert_reqs_total",
+			Help: "Number of ACME certificate requests",
+		},
+		[]string{"domains"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(certReqs)
+}
 
 func (a *Acme) ensureAcmeClient() error {
 
@@ -211,6 +227,8 @@ func (a *Acme) ObtainCertificate(domains []string) (data map[string][]byte, err 
 	if err != nil {
 		return data, fmt.Errorf("error getting certificate: %s", err)
 	}
+
+	certReqs.WithLabelValues(successfulDomains...).Inc()
 
 	certBuffer := bytes.NewBuffer([]byte{})
 	for _, cert := range certSlice {
